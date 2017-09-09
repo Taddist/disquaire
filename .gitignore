@@ -1,4 +1,5 @@
 disquaire_project/disquaire_project/__pycache__
-disquaire_project/store/__pycache__
-disqaire_pproject/store/migrations/__pycache__/
+disquaire_project/store/migrations/__pycache__/
+disquaire_project/store/__pycache__/
+disquaire_project/store/migrations/__pycache__/
 .idea/
