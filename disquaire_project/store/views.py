@@ -1,9 +1,9 @@
 from django.shortcuts import render, get_object_or_404
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
+from django.db import transaction, IntegrityError
 
 from .models import Album, Artist, Contact, Booking
-from .forms import ContactForm
-
+from .forms import ContactForm, ParagraphErrorList
 
 
 def index(request):
@@ -12,6 +12,7 @@ def index(request):
         'albums': albums
     }
     return render(request, 'store/index.html', context)
+
 
 def listing(request):
     albums_list = Album.objects.filter(available=True)
@@ -35,6 +36,7 @@ def listing(request):
     return render(request, 'store/listing.html', context)
 
 
+@transaction.atomic
 def detail(request, album_id):
     album = get_object_or_404(Album, pk=album_id)
     artists = [artist.name for artist in album.artists.all()]
@@ -46,32 +48,36 @@ def detail(request, album_id):
         'thumbnail': album.picture
     }
     if request.method == 'POST':
-        form = ContactForm(request.POST)
+        form = ContactForm(request.POST, error_class=ParagraphErrorList)
         if form.is_valid():
             email = form.cleaned_data['email']
             name = form.cleaned_data['name']
 
-            contact = Contact.objects.filter(email=email)
-            if not contact.exists():
-                # If a contact is not registered, create a new one.
-                contact = Contact.objects.create(
-                    email=email,
-                    name=name
-                )
-            else:
-                contact = contact.first()
+            try:
+                with transaction.atomic():
+                    contact = Contact.objects.filter(email=email)
+                    if not contact.exists():
+                        # If a contact is not registered, create a new one.
+                        contact = Contact.objects.create(
+                            email=email,
+                            name=name
+                        )
+                    else:
+                        contact = contact.first()
 
-            album = get_object_or_404(Album, id=album_id)
-            booking = Booking.objects.create(
-                contact=contact,
-                album=album
-            )
-            album.available = False
-            album.save()
-            context = {
-                'album_title': album.title
-            }
-            return render(request, 'store/merci.html', context)
+                    album = get_object_or_404(Album, id=album_id)
+                    booking = Booking.objects.create(
+                        contact=contact,
+                        album=album
+                    )
+                    album.available = False
+                    album.save()
+                    context = {
+                        'album_title': album.title
+                    }
+                    return render(request, 'store/merci.html', context)
+            except IntegrityError:
+                form.errors['internal'] = "Une erreur interne est apparue. Merci de recommencer votre requête."
         else:
             # Form data doesn't match the expected format.
             # Add errors to the template.
